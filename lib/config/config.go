@@ -11,6 +11,7 @@ type Config struct {
 		Host  string   `yaml:"host"`
 		Users []string `yaml:"users"`
 	} `yaml:"allowed"`
+	LogPath string `yaml:"logpath"`
 }
 
 func ReadConfig(path string) (*Config, error) {
@@ -18,7 +19,12 @@ func ReadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	conf := &Config{}
+	conf := &Config{
+		LogPath: "/tmp/ssh-wrapper.log",
+	}
 	err = yaml.Unmarshal(configData, conf)
+	if conf.LogPath == "" {
+		conf.LogPath = "/tmp/ssh-wrapper.log"
+	}
 	return conf, err
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/AgentDrasil/ssh-wrapper/lib/command"
 	"github.com/AgentDrasil/ssh-wrapper/lib/config"
@@ -41,6 +42,13 @@ func main() {
 
 	args := os.Args[1:]
 	fullCmd := strings.Join(args, " ")
+
+	logMsg := fmt.Sprintf("[%s] %s\n", time.Now().Format(time.RFC3339), fullCmd)
+	if len(args) > 0 {
+		f, _ := os.OpenFile(conf.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f.WriteString(logMsg)
+		f.Close()
+	}
 
 	if err := command.VerifyAccess(fullCmd, conf); err != nil {
 		fmt.Fprintf(os.Stderr, "Access Denied: %v\n", err)
