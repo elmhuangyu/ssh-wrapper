@@ -43,19 +43,25 @@ func main() {
 	args := os.Args[1:]
 	fullCmd := strings.Join(args, " ")
 
-	logMsg := fmt.Sprintf("[%s] %s\n", time.Now().Format(time.RFC3339), fullCmd)
-	if len(args) > 0 {
-		f, err := os.OpenFile(conf.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if err == nil {
-			_, _ = f.WriteString(logMsg)
-			_ = f.Close()
-		}
+	logfile, err := os.OpenFile(conf.LogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening log file: %v\n", err)
+		os.Exit(1)
 	}
+	defer func() {
+		if err := logfile.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error closing log file: %v\n", err)
+		}
+	}()
 
 	if err := command.VerifyAccess(fullCmd, conf); err != nil {
 		fmt.Fprintf(os.Stderr, "Access Denied: %v\n", err)
+		logMsg := fmt.Sprintf("[%s] denied command: git %s\n", time.Now().Format(time.RFC3339), fullCmd)
+		_, _ = logfile.WriteString(logMsg)
 		os.Exit(1)
 	}
+	logMsg := fmt.Sprintf("[%s] allowed command: git %s\n", time.Now().Format(time.RFC3339), fullCmd)
+	_, _ = logfile.WriteString(logMsg)
 
 	os.Clearenv()
 	_ = os.Setenv("PATH", "/usr/bin:/bin")
