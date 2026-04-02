@@ -50,7 +50,7 @@ ssh-keygen -t ed25519 -f test-data/keys/id_ed25519 -N "" -C "e2e-test" -q
 # =============================================================================
 info "Initialising bare test repo..."
 mkdir -p test-data/repos/repo1
-git init test-data/repos/repo1 --quiet
+git init --bare test-data/repos/repo1 --quiet
 
 # =============================================================================
 # STEP 3: Bring up docker compose
