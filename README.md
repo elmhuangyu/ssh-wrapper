@@ -113,7 +113,3 @@ Tests also run in GitHub Actions on every push and pull request, with no secrets
 ## License
 
 Apache 2.0
-
-## TODO
-
-- Add s6 overlay

@@ -1,0 +1,44 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GO_VERSION: 1.26
+  GOLANGCI_LINT_VERSION: latest
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v6
+    
+    - name: Run Go linter
+      uses: golangci/golangci-lint-action@v9
+      with:
+        version: ${{ env.GOLANGCI_LINT_VERSION }}
+
+    - name: Run Unit tests
+      run: |
+        go test -v ./...
+
+    - name: Run Pythner check, linter
+      run: |
+        uv sync --locked --all-extras --dev
+        uvx ruff check .
+        uvx ruff format . --check
+
+    - name: Run E2E tests
+      run: |
+        uvx pytest -v --log-cli-level=INFO -s

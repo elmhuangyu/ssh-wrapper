@@ -11,6 +11,8 @@ env:
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
+    # Only run on the original repo, skip forks to avoid unintended docker pushes
+    if: ${{ github.repository == 'AgentDrasil/ssh-wrapper' }}
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
