@@ -12,21 +12,27 @@ import (
 var (
 	ErrAccessDenied = errors.New("access denied")
 
-	namespaceRegex1 = regexp.MustCompile(`'/?([a-zA-Z0-9\-_]+)/[a-zA-Z0-9\-_.]+'`)
-	namespaceRegex2 = regexp.MustCompile(`'[^']*[:/]([a-zA-Z0-9\-_]+)/[a-zA-Z0-9\-_.]+'`)
+	quotedPathRegex = regexp.MustCompile(`'([^']+)'`)
 	hostRegex       = regexp.MustCompile(`@([a-zA-Z0-9\-\.]+)`)
 )
 
-func parseNamespace(cmd string) string {
-	matches := namespaceRegex1.FindStringSubmatch(cmd)
-	if len(matches) > 1 {
-		return matches[1]
+func parsePath(cmd string) string {
+	matches := quotedPathRegex.FindStringSubmatch(cmd)
+	if len(matches) < 2 {
+		return ""
 	}
-	matches = namespaceRegex2.FindStringSubmatch(cmd)
-	if len(matches) > 1 {
-		return matches[1]
+	path := matches[1]
+	if idx := strings.Index(path, "://"); idx >= 0 {
+		path = path[idx+3:]
+		if slashIdx := strings.Index(path, "/"); slashIdx >= 0 {
+			path = path[slashIdx+1:]
+		} else {
+			return ""
+		}
+	} else if idx := strings.Index(path, ":"); idx >= 0 {
+		path = path[idx+1:]
 	}
-	return ""
+	return path
 }
 
 func parseHost(cmd string) string {
@@ -59,20 +65,20 @@ func IsBasicHandshake(cmd string) bool {
 }
 
 func VerifyAccess(cmd string, conf *config.Config) error {
-	namespace := parseNamespace(cmd)
+	path := parsePath(cmd)
 	host := parseHost(cmd)
 
-	if namespace != "" {
+	if path != "" {
 		for _, entry := range conf.Allowed {
 			if entry.Host == host {
-				for _, u := range entry.Users {
-					if u == namespace {
+				for _, prefix := range entry.PathPrefix {
+					if strings.HasPrefix(path, prefix) {
 						return nil
 					}
 				}
 			}
 		}
-		return fmt.Errorf("%w: host '%s', repo namespace '%s' is not in allowlist", ErrAccessDenied, host, namespace)
+		return fmt.Errorf("%w: host '%s', path '%s' does not match any allowed path_prefix", ErrAccessDenied, host, path)
 	} else if IsBasicHandshake(cmd) {
 		if isHostAllowed(cmd, conf) {
 			return nil

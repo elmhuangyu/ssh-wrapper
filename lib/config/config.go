@@ -8,8 +8,8 @@ import (
 
 type Config struct {
 	Allowed []struct {
-		Host  string   `yaml:"host"`
-		Users []string `yaml:"users"`
+		Host       string   `yaml:"host"`
+		PathPrefix []string `yaml:"path_prefix"`
 	} `yaml:"allowed"`
 	LogPath string `yaml:"logpath"`
 }

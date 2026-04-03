@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestParseNamespace(t *testing.T) {
+func TestParsePath(t *testing.T) {
 	tests := []struct {
 		name     string
 		cmd      string
@@ -16,22 +16,27 @@ func TestParseNamespace(t *testing.T) {
 		{
 			name:     "git clone with colon format",
 			cmd:      "clone 'git@github.com:user/repo.git'",
-			expected: "user",
+			expected: "user/repo.git",
 		},
 		{
 			name:     "git clone with slash format",
 			cmd:      "clone 'ssh://git@github.com/user/repo.git'",
-			expected: "user",
+			expected: "user/repo.git",
+		},
+		{
+			name:     "git clone git-server",
+			cmd:      "clone 'git@git-server:/git-server/repos/repo1'",
+			expected: "/git-server/repos/repo1",
 		},
 		{
 			name:     "path without host",
 			cmd:      "clone '/user/repo.git'",
-			expected: "user",
+			expected: "/user/repo.git",
 		},
 		{
 			name:     "path without host no slash",
 			cmd:      "'user/repo.git'",
-			expected: "user",
+			expected: "user/repo.git",
 		},
 		{
 			name:     "no match",
@@ -47,7 +52,7 @@ func TestParseNamespace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseNamespace(tt.cmd)
+			result := parsePath(tt.cmd)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -149,12 +154,12 @@ func TestIsBasicHandshake(t *testing.T) {
 func TestVerifyAccess(t *testing.T) {
 	conf := &config.Config{
 		Allowed: []struct {
-			Host  string   `yaml:"host"`
-			Users []string `yaml:"users"`
+			Host       string   `yaml:"host"`
+			PathPrefix []string `yaml:"path_prefix"`
 		}{
 			{
-				Host:  "github.com",
-				Users: []string{"user1", "user2"},
+				Host:       "github.com",
+				PathPrefix: []string{"user1/", "user2/"},
 			},
 		},
 	}
@@ -171,10 +176,10 @@ func TestVerifyAccess(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name:         "disallowed namespace user",
+			name:         "disallowed path prefix",
 			cmd:          "clone 'git@github.com:user3/repo.git'",
 			expectErr:    true,
-			errInclusive: "allowlist",
+			errInclusive: "path_prefix",
 		},
 		{
 			name:         "disallowed host namespace",

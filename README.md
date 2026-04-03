@@ -46,8 +46,8 @@ logpath: /var/log/ssh-wrapper/ssh-wrapper.log
 
 allowed:
   - host: github.com
-    users:
-      - elmhuangyu
+    path_prefix:
+      - elmhuangyu/
 ```
 
 **`/etc/key`** — the private key, mode 0400, owned by root.
