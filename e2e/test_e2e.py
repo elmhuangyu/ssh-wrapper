@@ -1,6 +1,6 @@
 import logging
-import subprocess
 import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import Tuple
@@ -10,6 +10,7 @@ COMPOSE_FILE = (Path(__file__).parent.parent / "test-compose.yaml").resolve()
 KEYS_DIR = TEST_DATA / "keys"
 REPOS_DIR = TEST_DATA / "repos"
 LOGS_DIR = TEST_DATA / "logs"
+HOST_LOG_FILE = LOGS_DIR / "ssh-wrapper.log"
 
 
 class TestE2E:
@@ -34,6 +35,12 @@ class TestE2E:
         "-q",
       ],
     )
+
+  @classmethod
+  def init_bare_repo(cls, name: str):
+    repo_dir = REPOS_DIR / name
+    repo_dir.mkdir(parents=True)
+    cls.exec_in_host(["git", "init", "--bare", str(repo_dir)])
 
   @classmethod
   def stop_docker_compose(cls):
@@ -67,9 +74,8 @@ class TestE2E:
 
     cls.generate_ssh_key(key_file)
 
-    repo_dir = REPOS_DIR / "repo1"
-    repo_dir.mkdir(parents=True)
-    cls.exec_in_host(["git", "init", "--bare", str(repo_dir)])
+    cls.init_bare_repo("repo1")
+    cls.init_bare_repo("repo2")
     cls.exec_in_host(["docker", "compose", "-f", str(COMPOSE_FILE), "up", "-d", "--build"])
     time.sleep(3)
 
@@ -96,9 +102,21 @@ class TestE2E:
       ],
       capture_output=True,
       text=True,
-      check=True,
     )
     return result.returncode, result.stdout, result.stderr
+
+  def setup_method(self):
+    if HOST_LOG_FILE.exists():
+      HOST_LOG_FILE.unlink()
+
+  def teardown_method(self):
+    if HOST_LOG_FILE.exists():
+      HOST_LOG_FILE.unlink()
+
+  def assert_in_log(self, expected: str):
+    assert HOST_LOG_FILE.exists(), "Log file was not created"
+    log = HOST_LOG_FILE.read_text()
+    assert expected in log
 
   def test_git_clone_from_allowed_host(self):
     self.exec_in_test_app("rm -rf /tmp/repo1")
@@ -106,6 +124,9 @@ class TestE2E:
       "git clone git@git-server:/git-server/repos/repo1 /tmp/repo1"
     )
     assert code == 0, f"git clone failed: {stderr}"
+    self.assert_in_log(
+      "allowed command: ssh -o SendEnv=GIT_PROTOCOL git@git-server git-upload-pack '/git-server/repos/repo1'"
+    )
 
   def test_git_commit_and_push(self):
     code, stdout, stderr = self.exec_in_test_app(
@@ -115,22 +136,41 @@ class TestE2E:
       "git push origin HEAD"
     )
     assert code == 0, f"git push failed: {stderr}"
+    self.assert_in_log(
+      "allowed command: ssh git@git-server git-receive-pack '/git-server/repos/repo1'"
+    )
 
   def test_git_pull(self):
     code, stdout, stderr = self.exec_in_test_app("cd /tmp/repo1 && git pull")
     assert code == 0, f"git pull failed: {stderr}"
+    self.assert_in_log(
+      "allowed command: ssh -o SendEnv=GIT_PROTOCOL git@git-server git-upload-pack '/git-server/repos/repo1'"
+    )
+
+  def test_git_clone_from_disallowed_host_blocked(self):
+    code, stdout, stderr = self.exec_in_test_app(
+      "git clone git@not-allowed-host:/git-server/repos/repo1 /tmp/repo-blocked"
+    )
+    combined = stdout + stderr
+    assert code != 0, f"git clone should have failed: {combined}"
+    assert "Access Denied" in combined, f"Disallowed host was not blocked: {combined}"
+    self.assert_in_log(
+      "denied command: ssh -o SendEnv=GIT_PROTOCOL git@not-allowed-host git-upload-pack '/git-server/repos/repo1'"
+    )
+
+  def test_git_clone_from_disallowed_path_blocked(self):
+    code, stdout, stderr = self.exec_in_test_app(
+      "git clone git@git-server:/git-server/repos/repo2 /tmp/repo-blocked"
+    )
+    combined = stdout + stderr
+    assert code != 0, f"git clone should have failed: {combined}"
+    assert "Access Denied" in combined, f"Disallowed host was not blocked: {combined}"
+    self.assert_in_log(
+      "denied command: ssh -o SendEnv=GIT_PROTOCOL git@git-server git-upload-pack '/git-server/repos/repo2'"
+    )
 
   def test_ssh_to_disallowed_host_blocked(self):
     code, stdout, stderr = self.exec_in_test_app("ssh git@not-allowed-host echo hi 2>&1 || true")
     combined = stdout + stderr
     assert "Access Denied" in combined, f"Disallowed host was not blocked: {combined}"
-
-  def test_log_file_exists(self):
-    log_file = LOGS_DIR / "ssh-wrapper.log"
-    assert log_file.exists(), f"Log file missing: {log_file}"
-    assert log_file.stat().st_size > 0, f"Log file is empty: {log_file}"
-
-  def test_log_contains_git_server_activity(self):
-    log_file = LOGS_DIR / "ssh-wrapper.log"
-    content = log_file.read_text()
-    assert "git-server" in content, f"Log does not contain git-server activity: {content}"
+    self.assert_in_log("denied command: ssh git@not-allowed-host echo hi")

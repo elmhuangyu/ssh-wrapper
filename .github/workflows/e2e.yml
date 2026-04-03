@@ -26,10 +26,3 @@ jobs:
       - name: Run E2E tests
         run: |
           uvx pytest -v --log-cli-level=INFO -s
-
-      - name: Upload logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ssh-wrapper-logs
-          path: test-data/logs/

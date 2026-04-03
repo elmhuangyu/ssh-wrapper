@@ -117,4 +117,3 @@ Apache 2.0
 ## TODO
 
 - Add s6 overlay
-- pytest class, and add more tests
